@@ -31,7 +31,9 @@ This tool enables researchers to:
 
 ### 1️⃣ Clone & Install
 ```bash
-cd ai-usage-tracking
+# Clone the repository
+git clone https://github.com/GitAashishG/ai-in-ed.git
+cd ai-in-ed
 
 # Install backend dependencies
 cd backend
@@ -167,7 +169,7 @@ All data is stored in three tables:
 ## 📂 Project Structure
 
 ```
-ai-usage-tracking/
+ai-in-ed/
 ├── backend/                 # Express.js API server
 │   ├── src/
 │   │   ├── database/       # SQLite adapter (Cosmos DB ready)
