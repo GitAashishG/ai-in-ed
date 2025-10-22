@@ -212,35 +212,6 @@ ai-in-ed/
 - `.gitignore` configured to exclude credentials
 - CORS restricted to frontend URL
 
----
-
-## 📈 Research Use Cases
-
-### What You Can Study
-1. **Prompt Engineering Patterns**
-   - How students formulate questions
-   - Iteration and refinement behavior
-   - Prompt complexity over time
-
-2. **AI Response Utilization**
-   - Do students read full responses or skim?
-   - What content gets copied (code vs. explanations)?
-   - Response quality perception (via request frequency)
-
-3. **Copy-Paste Behavior**
-   - How much code is copied directly?
-   - Are students modifying AI code or using as-is?
-   - Comparison of pasted input vs. copied output
-
-4. **Engagement Metrics**
-   - Session duration and frequency
-   - Time spent per interaction
-   - Idle patterns (stuck vs. thinking)
-
-5. **Learning Indicators**
-   - Progression from simple to complex questions
-   - Dependence on AI over semester
-   - Context reset frequency (starting fresh)
 
 ### Data Export
 To analyze your data:
@@ -328,31 +299,4 @@ VITE_API_URL=http://localhost:3001
 |----------|-------------|---------|
 | `VITE_API_URL` | Backend API URL | `http://localhost:3001` |
 
----
 
-## 🤝 Contributing
-
-This is a research project for educational purposes. For questions or contributions:
-- Review `ARCHITECTURE.md` for technical details
-- Follow TypeScript best practices
-- Test locally before committing
-- Document new event types or features
-
----
-
-## 📄 License
-
-MIT License - Free to use for educational and research purposes.
-
----
-
-## 📞 Support
-
-For technical issues or research questions, contact the USU CS Research Team.
-
----
-
-**Research Disclaimer**: This application logs all user interactions for educational research. Students must provide informed consent before participation.
-
-**Version**: 1.0.0  
-**Last Updated**: October 21, 2025
