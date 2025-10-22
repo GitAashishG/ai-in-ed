@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Code block styling */
+pre {
+  @apply rounded-lg my-4 p-4 overflow-x-auto;
+  background-color: #1e293b !important;
+}
+
+code {
+  @apply text-sm;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+pre code {
+  @apply text-gray-100;
+}
+
+/* Inline code */
+:not(pre) > code {
+  @apply bg-gray-100 text-pink-600 px-1 py-0.5 rounded;
+}
