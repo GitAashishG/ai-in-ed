@@ -28,7 +28,7 @@ export interface Event {
   id: string;
   userId: string;
   sessionId: string;
-  eventType: 'typing' | 'paste' | 'responseView' | 'promptSubmit' | 'contextReset';
+  eventType: 'typing' | 'paste' | 'copy' | 'cut' | 'responseView' | 'promptSubmit' | 'contextReset' | 'promptFocus' | 'promptBlur' | 'responseScroll' | 'responseCopy' | 'promptClear' | 'sessionStart' | 'sessionEnd' | 'idleStart' | 'idleEnd';
   timestamp: string;
   data: Record<string, any>;
 }

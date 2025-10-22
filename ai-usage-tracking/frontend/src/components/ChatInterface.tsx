@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { apiService } from '../services/api';
 import ReactMarkdown from 'react-markdown';
 
@@ -27,6 +27,96 @@ export default function ChatInterface({
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const typingStartTimeRef = useRef<number>(0);
   const keystrokeCountRef = useRef<number>(0);
+  const lastActivityRef = useRef<number>(Date.now());
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionStartRef = useRef<number>(Date.now());
+
+  // Log session start on mount
+  useEffect(() => {
+    apiService.logEvent({
+      userID,
+      sessionId: apiService.getSessionId(),
+      eventType: 'sessionStart',
+      data: {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      }
+    });
+
+    // Track session end on unmount
+    return () => {
+      const sessionDuration = Date.now() - sessionStartRef.current;
+      apiService.logEvent({
+        userID,
+        sessionId: apiService.getSessionId(),
+        eventType: 'sessionEnd',
+        data: {
+          sessionDuration,
+          timestamp: new Date().toISOString()
+        }
+      });
+    };
+  }, [userID]);
+
+  // Idle detection
+  useEffect(() => {
+    const IDLE_THRESHOLD = 60000; // 60 seconds of inactivity
+    let isIdle = false;
+
+    const resetIdleTimer = () => {
+      lastActivityRef.current = Date.now();
+      
+      if (isIdle) {
+        // User became active again
+        isIdle = false;
+        apiService.logEvent({
+          userID,
+          sessionId: apiService.getSessionId(),
+          eventType: 'idleEnd',
+          data: {
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
+
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+
+      idleTimerRef.current = setTimeout(() => {
+        if (!isIdle) {
+          isIdle = true;
+          apiService.logEvent({
+            userID,
+            sessionId: apiService.getSessionId(),
+            eventType: 'idleStart',
+            data: {
+              timestamp: new Date().toISOString(),
+              idleThreshold: IDLE_THRESHOLD
+            }
+          });
+        }
+      }, IDLE_THRESHOLD);
+    };
+
+    // Track various activity events
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(event => {
+      window.addEventListener(event, resetIdleTimer);
+    });
+
+    // Initial timer
+    resetIdleTimer();
+
+    return () => {
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, resetIdleTimer);
+      });
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+    };
+  }, [userID]);
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -71,9 +161,101 @@ export default function ChatInterface({
       eventType: 'paste',
       data: {
         pastedLength: pastedText.length,
-        source: 'clipboard'
+        source: 'clipboard',
+        previousLength: prompt.length
       }
     });
+  };
+
+  const handleCopy = (_e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const selection = window.getSelection()?.toString() || '';
+    
+    apiService.logEvent({
+      userID,
+      sessionId: apiService.getSessionId(),
+      eventType: 'copy',
+      data: {
+        copiedLength: selection.length,
+        copiedFromPrompt: true,
+        totalPromptLength: prompt.length,
+        timestamp: new Date().toISOString()
+      }
+    });
+  };
+
+  const handleCut = (_e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const selection = window.getSelection()?.toString() || '';
+    
+    apiService.logEvent({
+      userID,
+      sessionId: apiService.getSessionId(),
+      eventType: 'cut',
+      data: {
+        cutLength: selection.length,
+        remainingLength: prompt.length - selection.length,
+        timestamp: new Date().toISOString()
+      }
+    });
+  };
+
+  const handlePromptFocus = () => {
+    apiService.logEvent({
+      userID,
+      sessionId: apiService.getSessionId(),
+      eventType: 'promptFocus',
+      data: {
+        currentLength: prompt.length,
+        timestamp: new Date().toISOString()
+      }
+    });
+  };
+
+  const handlePromptBlur = () => {
+    apiService.logEvent({
+      userID,
+      sessionId: apiService.getSessionId(),
+      eventType: 'promptBlur',
+      data: {
+        finalLength: prompt.length,
+        timestamp: new Date().toISOString()
+      }
+    });
+  };
+
+  const handleResponseScroll = () => {
+    if (responseRef.current) {
+      const element = responseRef.current;
+      const scrollPercentage = (element.scrollTop / (element.scrollHeight - element.clientHeight)) * 100;
+      
+      apiService.logEvent({
+        userID,
+        sessionId: apiService.getSessionId(),
+        eventType: 'responseScroll',
+        data: {
+          scrollPercentage: Math.round(scrollPercentage) || 0,
+          scrollTop: element.scrollTop,
+          scrollHeight: element.scrollHeight,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  };
+
+  const handleResponseCopy = () => {
+    const selection = window.getSelection()?.toString() || '';
+    if (selection.length > 0) {
+      apiService.logEvent({
+        userID,
+        sessionId: apiService.getSessionId(),
+        eventType: 'responseCopy',
+        data: {
+          copiedLength: selection.length,
+          totalResponseLength: response.length,
+          copiedText: selection.substring(0, 200), // First 200 chars for context
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
   };
 
   const handleSubmit = async () => {
@@ -125,7 +307,37 @@ export default function ChatInterface({
 
   const handleReset = async () => {
     try {
+      const previousPromptLength = prompt.length;
+      const previousResponseLength = response.length;
+      
       await apiService.resetContext(userID);
+      
+      // Log context reset
+      await apiService.logEvent({
+        userID,
+        sessionId: apiService.getSessionId(),
+        eventType: 'contextReset',
+        data: {
+          previousPromptLength,
+          previousResponseLength,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      // If clearing prompt field
+      if (previousPromptLength > 0) {
+        await apiService.logEvent({
+          userID,
+          sessionId: apiService.getSessionId(),
+          eventType: 'promptClear',
+          data: {
+            clearedLength: previousPromptLength,
+            method: 'resetButton',
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
+      
       setPrompt('');
       setResponse('');
       setError('');
@@ -173,6 +385,10 @@ export default function ChatInterface({
           value={prompt}
           onChange={handlePromptChange}
           onPaste={handlePaste}
+          onCopy={handleCopy}
+          onCut={handleCut}
+          onFocus={handlePromptFocus}
+          onBlur={handlePromptBlur}
           onKeyDown={handleKeyPress}
           placeholder="How do I sort a list in Python?"
           rows={6}
@@ -215,7 +431,9 @@ export default function ChatInterface({
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Response:</h3>
           <div
             ref={responseRef}
-            className="prose prose-sm max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-pink-600"
+            onScroll={handleResponseScroll}
+            onCopy={handleResponseCopy}
+            className="prose prose-sm max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-pink-600 max-h-96 overflow-y-auto"
           >
             <ReactMarkdown>
               {response}
