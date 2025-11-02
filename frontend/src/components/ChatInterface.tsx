@@ -24,9 +24,6 @@ export default function ChatInterface({
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const responseRef = useRef<HTMLDivElement>(null);
-  const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const typingStartTimeRef = useRef<number>(0);
-  const keystrokeCountRef = useRef<number>(0);
   const lastActivityRef = useRef<number>(Date.now());
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sessionStartRef = useRef<number>(Date.now());
@@ -100,7 +97,7 @@ export default function ChatInterface({
     };
 
     // Track various activity events
-    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    const activityEvents = ['mousedown', 'keydown', 'touchstart'];
     activityEvents.forEach(event => {
       window.addEventListener(event, resetIdleTimer);
     });
@@ -118,70 +115,81 @@ export default function ChatInterface({
     };
   }, [userID]);
 
-  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    setPrompt(newValue);
-    
-    // Track typing
-    if (typingStartTimeRef.current === 0) {
-      typingStartTimeRef.current = Date.now();
-    }
-    keystrokeCountRef.current++;
+  // Global paste and copy tracking
+  useEffect(() => {
+    const handleGlobalPaste = (event: ClipboardEvent) => {
+      const pastedText = event.clipboardData?.getData('text') || '';
+      const target = event.target as HTMLElement;
 
-    // Debounce logging
-    if (typingTimerRef.current) {
-      clearTimeout(typingTimerRef.current);
-    }
-    
-    typingTimerRef.current = setTimeout(() => {
-      if (typingStartTimeRef.current > 0) {
-        const timeInField = Date.now() - typingStartTimeRef.current;
+      apiService.logEvent({
+        userID,
+        sessionId: apiService.getSessionId(),
+        eventType: 'paste',
+        data: {
+          pastedLength: pastedText.length,
+          targetElement: target.tagName,
+          targetId: target.id,
+          timestamp: new Date().toISOString()
+        }
+      });
+    };
+
+    const handleGlobalCopy = (event: ClipboardEvent) => {
+      const copiedText = window.getSelection()?.toString() || '';
+      const target = event.target as HTMLElement;
+
+      if (copiedText.length > 0) {
         apiService.logEvent({
           userID,
           sessionId: apiService.getSessionId(),
-          eventType: 'typing',
+          eventType: 'copy',
           data: {
-            inputLength: newValue.length,
-            timeInField,
-            keystrokeCount: keystrokeCountRef.current
+            copiedLength: copiedText.length,
+            targetElement: target.tagName,
+            targetId: target.id,
+            timestamp: new Date().toISOString()
           }
         });
-        typingStartTimeRef.current = 0;
-        keystrokeCountRef.current = 0;
       }
-    }, 2000);
+    };
+
+    document.addEventListener('paste', handleGlobalPaste);
+    document.addEventListener('copy', handleGlobalCopy);
+
+    return () => {
+      document.removeEventListener('paste', handleGlobalPaste);
+      document.removeEventListener('copy', handleGlobalCopy);
+    };
+  }, [userID]);
+
+  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPrompt(e.target.value);
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const pastedText = e.clipboardData.getData('text');
-    
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Log individual keystroke
     apiService.logEvent({
       userID,
       sessionId: apiService.getSessionId(),
-      eventType: 'paste',
+      eventType: 'keystroke',
       data: {
-        pastedLength: pastedText.length,
-        source: 'clipboard',
-        previousLength: prompt.length
-      }
-    });
-  };
-
-  const handleCopy = (_e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const selection = window.getSelection()?.toString() || '';
-    
-    apiService.logEvent({
-      userID,
-      sessionId: apiService.getSessionId(),
-      eventType: 'copy',
-      data: {
-        copiedLength: selection.length,
-        copiedFromPrompt: true,
-        totalPromptLength: prompt.length,
+        key: e.key,
+        code: e.code,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+        metaKey: e.metaKey,
         timestamp: new Date().toISOString()
       }
     });
+
+    // Handle submit shortcut
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
+
 
   const handleCut = (_e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const selection = window.getSelection()?.toString() || '';
@@ -222,41 +230,7 @@ export default function ChatInterface({
     });
   };
 
-  const handleResponseScroll = () => {
-    if (responseRef.current) {
-      const element = responseRef.current;
-      const scrollPercentage = (element.scrollTop / (element.scrollHeight - element.clientHeight)) * 100;
-      
-      apiService.logEvent({
-        userID,
-        sessionId: apiService.getSessionId(),
-        eventType: 'responseScroll',
-        data: {
-          scrollPercentage: Math.round(scrollPercentage) || 0,
-          scrollTop: element.scrollTop,
-          scrollHeight: element.scrollHeight,
-          timestamp: new Date().toISOString()
-        }
-      });
-    }
-  };
 
-  const handleResponseCopy = () => {
-    const selection = window.getSelection()?.toString() || '';
-    if (selection.length > 0) {
-      apiService.logEvent({
-        userID,
-        sessionId: apiService.getSessionId(),
-        eventType: 'responseCopy',
-        data: {
-          copiedLength: selection.length,
-          totalResponseLength: response.length,
-          copiedText: selection.substring(0, 200), // First 200 chars for context
-          timestamp: new Date().toISOString()
-        }
-      });
-    }
-  };
 
   const handleSubmit = async () => {
     if (!prompt.trim() || loading) return;
@@ -346,12 +320,6 @@ export default function ChatInterface({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -384,12 +352,10 @@ export default function ChatInterface({
           id="prompt"
           value={prompt}
           onChange={handlePromptChange}
-          onPaste={handlePaste}
-          onCopy={handleCopy}
           onCut={handleCut}
           onFocus={handlePromptFocus}
           onBlur={handlePromptBlur}
-          onKeyDown={handleKeyPress}
+          onKeyDown={handleKeyDown}
           placeholder="How do I sort a list in Python?"
           rows={6}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-usu-blue focus:border-transparent outline-none transition resize-none"
@@ -431,8 +397,6 @@ export default function ChatInterface({
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Response:</h3>
           <div
             ref={responseRef}
-            onScroll={handleResponseScroll}
-            onCopy={handleResponseCopy}
             className="prose prose-sm max-w-none prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-code:text-pink-600 max-h-96 overflow-y-auto"
           >
             <ReactMarkdown>
