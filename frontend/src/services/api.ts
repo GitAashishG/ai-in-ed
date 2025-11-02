@@ -18,7 +18,7 @@ export interface SubmitResponse {
 export interface LogEventData {
   userID: string;
   sessionId: string;
-  eventType: 'typing' | 'paste' | 'copy' | 'cut' | 'responseView' | 'promptSubmit' | 'contextReset' | 'promptFocus' | 'promptBlur' | 'responseScroll' | 'responseCopy' | 'promptClear' | 'sessionStart' | 'sessionEnd' | 'idleStart' | 'idleEnd';
+  eventType: 'keystroke' | 'paste' | 'copy' | 'cut' | 'responseView' | 'promptSubmit' | 'contextReset' | 'promptFocus' | 'promptBlur' | 'responseScroll' | 'responseCopy' | 'promptClear' | 'sessionStart' | 'sessionEnd' | 'idleStart' | 'idleEnd';
   data: Record<string, any>;
 }
 
